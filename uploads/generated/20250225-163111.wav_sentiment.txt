@@ -1,0 +1,6 @@
+Transcript:
+today is Tuesday
+
+Sentiment Analysis:
+SENTIMENT SCORE: 0.0,SENTIMENT MAGNITUDE: 0.0
+Sentiment Classification: NEUTRAL SENTIMENT
