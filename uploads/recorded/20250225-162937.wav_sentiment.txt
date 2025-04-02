@@ -1,6 +1,0 @@
-Transcript:
-My Name is Cinoo
-
-Sentiment Analysis:
-SENTIMENT SCORE: 0.20000000298023224,SENTIMENT MAGNITUDE: 0.20000000298023224
-Sentiment Classification: NEUTRAL SENTIMENT

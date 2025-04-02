@@ -1,6 +1,0 @@
-Transcript:
-he's an arrogant man
-
-Sentiment Analysis:
-SENTIMENT SCORE: -0.800000011920929,SENTIMENT MAGNITUDE: 0.800000011920929
-Sentiment Classification: NEGATIVE SENTIMENT

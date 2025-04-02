@@ -1,0 +1,5 @@
+Transcript:
+I don't like Mondays
+
+Sentiment Analysis:
+negative

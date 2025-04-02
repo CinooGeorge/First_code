@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Recorder and Text-to-Speech</title>
+    <title>Audio Recorder and Sentiment Analysis</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,8 +21,9 @@
         }
     </style>
 </head>
+
 <body>
-    <h1>Audio Recorder and Text-to-Speech</h1>
+    <h1>Audio Recorder and Sentiment Analysis</h1>
 
     <table>
         <tr>
@@ -34,45 +35,24 @@
                 <audio id="audio" controls></audio>
 
                 <!-- Hidden form for upload -->
-                <form id="uploadForm" method="POST" enctype="multipart/form-data" >
+                <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="audio_data" id="audioData">
+                    <input type="submit" style="display: none;" id="submitForm">
                 </form>
                 <hr>
                 
-                <h2>Recorded Files (Speech to Text)</h2>
+                <h2>Recorded Files</h2>
                 <ul>
                     {% for file in stt_files %}
                     <li>
                         <strong>{{ file[:-4] }}</strong><br>
                         <audio controls>
-                            <source src="{{ url_for('upload_file', folder='generated', filename=file) }}" type="audio/wav">
+                            <source src="{{ url_for('upload_file', filename=file) }}" type="audio/wav">
                             Your browser does not support the audio element.
                         </audio><br>
-                        <a href="{{ url_for('upload_file', folder='generated', filename=file + '.txt') }}">{{ file[:-4] }} Transcript</a><br>
-                        <a href="{{ url_for('upload_file', folder='generated', filename=file + '_sentiment.txt') }}">Transcript and Sentiment</a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </td>
-
-            <td style="width:50%">
-                <h2>Type in Text to Generate Audio</h2>
-                <form action="/upload_text" method="POST">
-                    <textarea name="text" rows="8" cols="50" placeholder="Enter your text here"></textarea><br>
-                    <input type="submit" value="Generate Audio">
-                </form>
-
-                <h3>Generated Audio Files (Text to Speech)</h3>
-                <ul>
-                    {% for file, transcript, sentiment in tts_file_data %}
-                    <li>
-                        <strong>{{ file[:-4] }}</strong><br>
-                        <audio controls>
-                            <source src="{{ url_for('upload_file', folder='recorded', filename=file) }}" type="audio/wav">
-                            Your browser does not support the audio element.
-                        </audio><br>
-                        <a href="{{ url_for('upload_file', folder='recorded', filename=file + '.txt') }}">{{ file[:-4] }} Transcript</a><br>
-                        <a href="{{ url_for('upload_file', folder='recorded', filename=file + '_sentiment.txt') }}">Transcript and Sentiment</a>
+                        <a href="{{ url_for('upload_file', filename=file + '.txt') }}">
+                            Download Transcript & Sentiment Analysis
+                        </a>
                     </li>
                     {% endfor %}
                 </ul>
@@ -81,7 +61,5 @@
     </table>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
-
-    </script>
 </body>
 </html>

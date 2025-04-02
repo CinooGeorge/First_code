@@ -1,6 +1,0 @@
-Transcript:
-she is upset.
-
-Sentiment Analysis:
-SENTIMENT SCORE: -0.8999999761581421,SENTIMENT MAGNITUDE: 0.8999999761581421
-Sentiment Classification: NEGATIVE SENTIMENT
