@@ -165,4 +165,4 @@ def clean_old_audio_files():
 # clean_old_audio_files()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=8080)
