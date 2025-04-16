@@ -10,6 +10,7 @@ import time
 # Initialize Flask app
 app = Flask(__name__)
 
+
 # Configure upload folders
 app.config['UPLOAD_FOLDER_BOOKS'] = 'uploads/books'
 app.config['UPLOAD_FOLDER_QUESTIONS'] = 'uploads/questions'
