@@ -1,96 +1,167 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 import os
-from datetime import datetime
-import vertexai
-from vertexai.generative_models import GenerativeModel, Part
+import uuid
+import logging
+from flask import Flask, request, render_template, jsonify, send_from_directory, url_for
+from werkzeug.utils import secure_filename
+import google.generativeai as genai
+from google.cloud import texttospeech  # Google Cloud Text-to-Speech library
+import time
 
+# Initialize Flask app
 app = Flask(__name__)
 
-# Configure the uploads folder
-UPLOADS_FOLDER = 'uploads'
-GENERATED_FOLDER = os.path.join(UPLOADS_FOLDER, 'generated')  # For STT and Sentiment Analysis responses
+# Configure upload folders
+app.config['UPLOAD_FOLDER_BOOKS'] = 'uploads/books'
+app.config['UPLOAD_FOLDER_QUESTIONS'] = 'uploads/questions'
+app.config['UPLOAD_FOLDER_AUDIO_RESPONSES'] = 'uploads/audio_responses'
 
-app.config['UPLOADS_FOLDER'] = UPLOADS_FOLDER
-app.config['GENERATED_FOLDER'] = GENERATED_FOLDER
+# Create folders if not exist
+os.makedirs(app.config['UPLOAD_FOLDER_BOOKS'], exist_ok=True)
+os.makedirs(app.config['UPLOAD_FOLDER_QUESTIONS'], exist_ok=True)
+os.makedirs(app.config['UPLOAD_FOLDER_AUDIO_RESPONSES'], exist_ok=True)
 
-# Ensure the directory exists
-os.makedirs(GENERATED_FOLDER, exist_ok=True)
+# ✅ Gemini API Setup
+api_key = os.environ.get("GEMINI_API_KEY")
+if not api_key:
+    raise ValueError("GEMINI_API_KEY is not set in the environment variables!")
 
-# Initialize Google Cloud Vertex AI
-vertexai.init(project='cinoo-conai', location='us-central1')  # Use your GCP project and location
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel(model_name="gemini-1.5-pro") 
 
-model = GenerativeModel("gemini-1.5-flash-001")  # Use your preferred model
+# Initialize Google Cloud TTS Client
+client = texttospeech.TextToSpeechClient()
 
-ALLOWED_EXTENSIONS = {'wav'}
+# Enable Flask debug mode for detailed logging
+app.config['DEBUG'] = True
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+# Set up logging to capture debug information
+logging.basicConfig(level=logging.DEBUG)
 
-def get_files(folder):
-    files = [f for f in os.listdir(folder) if allowed_file(f)]
-    files.sort(reverse=True)
-    return files
-
-@app.route('/')
+@app.route("/")
 def index():
-    stt_files = get_files(GENERATED_FOLDER)  # Get uploaded audio files
-    text_files = [f for f in os.listdir(GENERATED_FOLDER) if f.endswith('.txt')]  # Get transcript files
-    text_files.sort(reverse=True)
-    return render_template('index.html', stt_files=stt_files, text_files=text_files)
+    return render_template("index.html")
 
-@app.route('/upload', methods=['POST'])
+@app.route("/upload_book", methods=["POST"])
+def upload_book():
+    # Clear the previous uploaded book
+    for file in os.listdir(app.config['UPLOAD_FOLDER_BOOKS']):
+        os.remove(os.path.join(app.config['UPLOAD_FOLDER_BOOKS'], file))
+
+    book = request.files.get("book")
+    if book and book.filename.endswith(".pdf"):
+        # Save the book to the server
+        path = os.path.join(app.config['UPLOAD_FOLDER_BOOKS'], secure_filename(book.filename))
+        book.save(path)
+        app.logger.info(f"Book uploaded successfully: {book.filename}")
+        
+        # Create the URL for the uploaded book
+        book_url = url_for('serve_book', filename=secure_filename(book.filename))
+
+        return jsonify({"message": "✅ Book uploaded successfully!", "book_url": book_url})
+    else:
+        app.logger.error(f"Invalid book format: {book.filename if book else 'None'}")
+        return "❌ Invalid book format, only PDF files are allowed.", 400
+
+@app.route("/upload", methods=["POST"])
 def upload_audio():
-    if 'audio_data' not in request.files:
-        return redirect(request.url)
+    audio = request.files.get("audio_data")
+    if not audio:
+        app.logger.error("No audio file received.")
+        return jsonify({"error": "No audio received"}), 400
 
-    file = request.files['audio_data']
-    if file.filename == '':
-        return redirect(request.url)
+    # Ensure audio file is in a valid format (WAV or MP3)
+    valid_audio_formats = ['.wav', '.mp3']
+    if not any(audio.filename.endswith(ext) for ext in valid_audio_formats):
+        app.logger.error(f"Invalid audio format: {audio.filename}")
+        return jsonify({"error": "Invalid audio format. Only WAV and MP3 are supported."}), 400
 
-    if file and allowed_file(file.filename):
-        filename = datetime.now().strftime("%Y%m%d-%H%M%S") + '.wav'
-        file_path = os.path.join(app.config['GENERATED_FOLDER'], filename)
-        file.save(file_path)
+    # Save the audio file
+    audio_filename = secure_filename(audio.filename)
+    audio_path = os.path.join(app.config['UPLOAD_FOLDER_QUESTIONS'], audio_filename)
+    try:
+        audio.save(audio_path)
+        app.logger.info(f"Audio file saved: {audio_filename}")
+    except Exception as e:
+        app.logger.error(f"Error saving audio file: {str(e)}")
+        return jsonify({"error": f"Error saving audio file: {str(e)}"}), 500
 
-        # Transcribe the audio and analyze sentiment using the multimodal LLM
-        transcript, sentiment_analysis = analyze_audio_with_llm(file_path)
-
-        # Save the response to a text file
-        output_filename = os.path.join(app.config['GENERATED_FOLDER'], filename + ".txt")
-        with open(output_filename, 'w') as output_file:
-            output_file.write(f"Transcript:\n{transcript}\n\nSentiment Analysis:\n{sentiment_analysis}")
-
-    return redirect('/')
-
-def analyze_audio_with_llm(audio_path):
-    # Read the audio file content
-    with open(audio_path, 'rb') as audio_file:
-        audio_content = audio_file.read()
-
-    # Prepare the audio part
-    audio_part = Part.from_data(audio_content, mime_type="audio/wav")
-
-    # Define the prompt for the multimodal LLM
-    prompt = """
-    Please provide an exact transcript for the audio, followed by sentiment analysis.
-
-    Your response should follow the format:
-
-    Text: USERS SPEECH TRANSCRIPTION
-
-    Sentiment Analysis: positive|neutral|negative
-    """
-
-    # Generate the response from the model
-    response = model.generate_content([audio_part, prompt])
+    # Find the most recent book
+    book_files = sorted(os.listdir(app.config['UPLOAD_FOLDER_BOOKS']), reverse=True)
+    if not book_files:
+        return jsonify({"answer": "No book uploaded yet!"})
     
-    # Extract the transcript and sentiment from the response
-    response_text = response.text
-    return response_text.split("\n\nSentiment Analysis:")[0].replace("Text:", "").strip(), response_text.split("\n\nSentiment Analysis:")[1].strip()
+    book_path = os.path.join(app.config['UPLOAD_FOLDER_BOOKS'], book_files[0])
 
-@app.route('/uploads/<filename>')
-def upload_file(filename):
-    return send_from_directory(app.config['GENERATED_FOLDER'], filename)
+    # Upload files to Gemini
+    try:
+        book_part = genai.upload_file(book_path, mime_type="application/pdf")
+        audio_part = genai.upload_file(audio_path, mime_type="audio/wav" if audio.filename.endswith(".wav") else "audio/mp3")
+    except Exception as e:
+        return jsonify({"error": f"Error uploading files to Gemini: {str(e)}"}), 500
 
-if __name__ == '__main__':
+    prompt = "Answer the user's question in the audio file based on the content of the uploaded book."
+    contents = [prompt, audio_part, book_part]
+
+    try:
+        # Generate response from the model
+        response = model.generate_content(contents)
+        answer = response.text.strip()
+
+        if not answer:
+            return jsonify({"error": "No answer generated. Please check the content and try again."}), 500
+
+        # Convert answer to audio using Google Text-to-Speech
+        audio_response_filename = f"response_audio_{uuid.uuid4().hex}.mp3"  # Unique filename for each response
+        audio_response_path = os.path.join(app.config['UPLOAD_FOLDER_AUDIO_RESPONSES'], audio_response_filename)
+
+        # Prepare the synthesis input for Google TTS
+        synthesis_input = texttospeech.SynthesisInput(text=answer)
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+        )
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3
+        )
+
+        # Generate audio response from the text
+        response_audio = client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+
+        # Save audio response to file
+        with open(audio_response_path, "wb") as out:
+            out.write(response_audio.audio_content)
+
+        app.logger.info(f"Audio response saved: {audio_response_filename}")
+
+        return jsonify({"answer": answer, "audio_url": f"/audio_responses/{audio_response_filename}"})
+
+    except Exception as e:
+        app.logger.error(f"Error generating content with Gemini: {str(e)}")
+        return jsonify({"error": f"Error generating content with Gemini: {str(e)}"}), 500
+
+@app.route("/audio_responses/<filename>")
+def serve_audio(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER_AUDIO_RESPONSES'], filename)
+
+@app.route("/books/<filename>")
+def serve_book(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER_BOOKS'], filename)
+
+# Optional cleanup function for old audio files (delete files older than 24 hours)
+def clean_old_audio_files():
+    threshold_time = time.time() - (24 * 60 * 60)  # Files older than 24 hours
+    for filename in os.listdir(app.config['UPLOAD_FOLDER_AUDIO_RESPONSES']):
+        file_path = os.path.join(app.config['UPLOAD_FOLDER_AUDIO_RESPONSES'], filename)
+        if os.path.isfile(file_path):
+            # Get the file's last modified time
+            file_modified_time = os.path.getmtime(file_path)
+            if file_modified_time < threshold_time:
+                os.remove(file_path)
+                app.logger.info(f"Deleted old audio file: {filename}")
+
+# Uncomment this line to run the cleanup function periodically
+# clean_old_audio_files()
+
+if __name__ == "__main__":
     app.run(debug=True)

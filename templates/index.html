@@ -3,62 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Recorder and Sentiment Analysis</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        table {
-            width: 100%;
-        }
-        td {
-            vertical-align: top;
-            padding: 10px;
-        }
-        audio {
-            margin-top: 10px;
-        }
-    </style>
+    <title>Book QA</title>
 </head>
-
 <body>
-    <h1>Audio Recorder and Sentiment Analysis</h1>
+    <h1>📘 Book Knowledge App</h1>
 
-    <table>
-        <tr>
-            <td style="width:50%">
-                <h2>Record and Upload Audio</h2>
-                <button id="record">Record</button>
-                <button id="stop" disabled>Stop</button>
-                <span id="timer">00:00</span>
-                <audio id="audio" controls></audio>
+    <h2>Upload a PDF Book</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="book" accept=".pdf" required id="bookInput">
+        <button type="submit">📤Upload Book</button>
+    </form>
+    <p id="uploadStatus"></p>
 
-                <!-- Hidden form for upload -->
-                <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="audio_data" id="audioData">
-                    <input type="submit" style="display: none;" id="submitForm">
-                </form>
-                <hr>
-                
-                <h2>Recorded Files</h2>
-                <ul>
-                    {% for file in stt_files %}
-                    <li>
-                        <strong>{{ file[:-4] }}</strong><br>
-                        <audio controls>
-                            <source src="{{ url_for('upload_file', filename=file) }}" type="audio/wav">
-                            Your browser does not support the audio element.
-                        </audio><br>
-                        <a href="{{ url_for('upload_file', filename=file + '.txt') }}">
-                            Download Transcript & Sentiment Analysis
-                        </a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </td>
-        </tr>
-    </table>
+    <hr>
+
+    <h2>Record / Ask any Question from the uploaded Book</h2>
+    <button id="record">🎙️ Record</button>
+    <button id="stop" disabled>⏹️ Stop</button>
+    <p>⏱ Time: <span id="timer">00:00</span></p>
+
+    <h2>📄 Gemini's Answer:</h2>
+    <div id="answer">Your answer will appear here...</div>
+
+    <h2>🎧 Listen to Answer:</h2>
+    <audio id="audioPlayer" controls autoplay></audio>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

@@ -1,5 +1,0 @@
-Transcript:
-Today is Monday.  p p p p p p
-
-Sentiment Analysis:
-neutral

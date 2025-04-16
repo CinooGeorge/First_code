@@ -1,5 +1,0 @@
-Transcript:
-Hi Today's Monday and I like Mondays
-
-Sentiment Analysis:
-positive
